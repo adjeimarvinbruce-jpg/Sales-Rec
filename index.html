@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#5b2a4e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>Salon Book</title>
+<style>
+:root{--bg:#f7f3f6;--card:#fff;--ink:#231a21;--mute:#7a6b75;--pri:#5b2a4e;--onpri:#fff;--ok:#1d7a4a;--bad:#b3261e;--line:#e8dde4;--momo:#ffcc00;--cash:#2e8b57}
+@media(prefers-color-scheme:dark){:root{--bg:#161014;--card:#231a20;--ink:#f4edf1;--mute:#a99ba4;--pri:#d9a0c8;--onpri:#2a1224;--ok:#6fd49c;--bad:#ff8a80;--line:#3a2d35}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.4 system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--ink);padding:0 16px 96px}
+main{max-width:520px;margin:0 auto;padding-top:max(16px,env(safe-area-inset-top))}
+h1{font-size:15px;font-weight:600;color:var(--mute);margin:8px 0 4px}
+h2{font-size:15px;margin:22px 0 8px}
+.hero{background:var(--pri);color:var(--onpri);border-radius:20px;padding:20px}
+.hero .big{font-size:40px;font-weight:700;letter-spacing:-.02em}
+.hero .row{display:flex;gap:18px;margin-top:6px;font-size:14px;opacity:.9}
+.nudge{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--momo);border-radius:10px;padding:10px 12px;margin-top:12px;font-size:14px}
+.nudge button{margin-left:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{font:inherit;color:inherit;cursor:pointer}
+.svc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:left;min-height:64px}
+.svc b{display:block}.svc span{color:var(--mute);font-size:14px}
+.svc:active{transform:scale(.98)}
+.exp{width:100%;margin-top:10px;padding:14px;border-radius:14px;border:1.5px dashed var(--bad);background:none;color:var(--bad);font-weight:600}
+.item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.item small{color:var(--mute);display:block}
+.item .a{font-weight:600}.neg{color:var(--bad)}
+.item .x{background:none;border:0;color:var(--mute);font-size:20px;padding:4px 10px}
+.empty{color:var(--mute);padding:14px 0}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;padding:14px 0;background:none;border:0;color:var(--mute);font-weight:600}
+nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
+dialog{margin:auto auto 0;width:100%;max-width:520px;border:0;border-radius:22px 22px 0 0;padding:20px 20px max(20px,env(safe-area-inset-bottom));background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+input,select,textarea{width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);margin:6px 0 12px}
+textarea{min-height:170px}
+.pay{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pay button{padding:18px;border:0;border-radius:14px;font-weight:700;font-size:18px;color:#111}
+.cash{background:var(--cash);color:#fff!important}.momo{background:var(--momo)}
+.btn{padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.btn.p{background:var(--pri);color:var(--onpri);border:0}
+.wk{display:grid;grid-template-columns:1fr auto auto auto;gap:6px 14px;font-size:15px;align-items:center}
+.wk .h{color:var(--mute);font-size:13px}.r{text-align:right}
+.tot{font-weight:700}
+</style></head><body><main id="app"></main>
+<nav><button data-tab="today">Today</button><button data-tab="week">Week</button><button data-tab="set">Settings</button></nav>
+<dialog id="sheet"></dialog>
+<script>
+const $=s=>document.querySelector(s);
+const DEF=[["Braids",150],["Cornrows",80],["Wash & set",60],["Relaxer",120],["Weave install",200],["Twist",100],["Trim",30],["Treatment",70]];
+const CATS=["Hair products","Rent","Electricity","Transport","Food","Other"];
+let db,entries=[],cfg={services:DEF,lastBackup:0},tab="today",sel=null;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money=n=>"GH₵"+Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+const dk=t=>{const d=new Date(t);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const sum=(a,t)=>a.filter(e=>e.type===t).reduce((n,e)=>n+e.amt,0);
+const hm=t=>new Date(t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+
+/* storage: IndexedDB, entirely on this phone */
+const open=()=>new Promise((ok,no)=>{const r=indexedDB.open("salonbook",1);
+ r.onupgradeneeded=()=>{r.result.createObjectStore("entries",{keyPath:"id"});r.result.createObjectStore("kv")};
+ r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+const st=(s,m="readonly")=>db.transaction(s,m).objectStore(s);
+const pr=r=>new Promise((ok,no)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+const putEntry=e=>pr(st("entries","readwrite").put(e));
+const saveCfg=()=>pr(st("kv","readwrite").put(cfg,"cfg"));
+
+async function init(){
+ db=await open();
+ entries=await pr(st("entries").getAll());
+ const c=await pr(st("kv").get("cfg")); if(c)cfg={...cfg,...c};
+ if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+ if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
+ render();
+}
+
+function sheet(html){const s=$("#sheet");s.innerHTML=html;if(!s.open)s.showModal()}
+const close=()=>$("#sheet").close();
+
+function render(){
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
+ $("#app").innerHTML=tab==="today"?today():tab==="week"?week():settings();
+}
+
+function today(){
+ const t=dk(Date.now()),te=entries.filter(e=>e.d===t).sort((a,b)=>b.t-a.t);
+ const s=sum(te,"sale"),x=sum(te,"expense"),h=new Date().getHours();
+ let n="";
+ if(!te.some(e=>e.type==="sale"))n+=`<div class="nudge">No sales logged today yet.</div>`;
+ else if(!te.some(e=>e.type==="expense")&&h>=16)n+=`<div class="nudge">Any expenses today? Tap “Add expense”.</div>`;
+ if(entries.length&&Date.now()-cfg.lastBackup>7*864e5)n+=`<div class="nudge">Back up your records this week. <button class="btn" data-act="backup">Back up now</button></div>`;
+ return `<h1>${new Date().toLocaleDateString([],{weekday:"long",day:"numeric",month:"long"})}</h1>
+ <div class="hero"><div>Sales today</div><div class="big">${money(s)}</div>
+ <div class="row"><span>Expenses ${money(x)}</span><span>Profit ${money(s-x)}</span></div></div>${n}
+ <h2>Tap a service to record a sale</h2>
+ <div class="grid">${cfg.services.map((v,i)=>`<button class="svc" data-act="svc" data-i="${i}"><b>${esc(v[0])}</b><span>${money(v[1])}</span></button>`).join("")}
+ <button class="svc" data-act="svc" data-i="-1"><b>Other</b><span>Type name and price</span></button></div>
+ <button class="exp" data-act="exp">− Add expense</button>
+ <h2>Today’s records</h2>
+ ${te.length?te.map(e=>`<div class="item"><div>${esc(e.label)}<small>${hm(e.t)}${e.pay?" · "+(e.pay==="momo"?"MoMo":"Cash"):""}</small></div>
+ <div><span class="a ${e.type==="expense"?"neg":""}">${e.type==="expense"?"−":""}${money(e.amt)}</span><button class="x" data-act="del" data-id="${e.id}" aria-label="Delete">×</button></div></div>`).join(""):`<div class="empty">Nothing yet. Your first sale will show here.</div>`}`;
+}
+
+function week(){
+ let rows="",S=0,X=0;
+ for(let i=0;i<7;i++){const d=new Date();d.setDate(d.getDate()-i);const k=dk(d),a=entries.filter(e=>e.d===k),s=sum(a,"sale"),x=sum(a,"expense");S+=s;X+=x;
+  rows+=`<div>${i?d.toLocaleDateString([],{weekday:"short",day:"numeric"}):"Today"}</div><div class="r">${money(s)}</div><div class="r neg">${x?"−"+money(x):"–"}</div><div class="r">${money(s-x)}</div>`}
+ const w=entries.filter(e=>e.type==="sale"&&e.d>=dk(Date.now()-6*864e5)),cash=sum(w.filter(e=>e.pay==="cash"),"sale"),momo=sum(w.filter(e=>e.pay==="momo"),"sale");
+ const top={};w.forEach(e=>top[e.label]=(top[e.label]||0)+e.amt);
+ const tl=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,3);
+ return `<h1>Last 7 days</h1><div class="hero"><div>Profit</div><div class="big">${money(S-X)}</div><div class="row"><span>Sales ${money(S)}</span><span>Expenses ${money(X)}</span></div></div>
+ <h2>Day by day</h2><div class="wk"><div class="h"></div><div class="h r">Sales</div><div class="h r">Spent</div><div class="h r">Profit</div>${rows}</div>
+ <h2>Cash and MoMo</h2><div class="wk" style="grid-template-columns:1fr auto"><div>Cash</div><div class="r tot">${money(cash)}</div><div>MoMo</div><div class="r tot">${money(momo)}</div></div>
+ <h2>Top earners</h2>${tl.length?tl.map(([n,v])=>`<div class="item"><div>${esc(n)}</div><div class="a">${money(v)}</div></div>`).join(""):`<div class="empty">No sales this week yet.</div>`}`;
+}
+
+function settings(){
+ const lb=cfg.lastBackup?new Date(cfg.lastBackup).toLocaleDateString():"never";
+ return `<h1>Settings</h1><h2>Services and prices</h2>
+ <div style="color:var(--mute);font-size:14px">One per line: name, price</div>
+ <textarea id="svcs">${esc(cfg.services.map(v=>v[0]+", "+v[1]).join("\n"))}</textarea>
+ <button class="btn p" data-act="savesvc">Save services</button>
+ <h2>Backup</h2><div style="color:var(--mute);font-size:14px;margin-bottom:10px">Last backup: ${lb}. Send the file to yourself on WhatsApp so it survives a lost phone.</div>
+ <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn p" data-act="backup">Back up</button><button class="btn" data-act="csv">Export CSV</button><button class="btn" data-act="imp">Restore</button></div>
+ <input type="file" id="file" accept=".json" hidden>`;
+}
+
+async function addEntry(e){await putEntry(e);entries.push(e);close();render()}
+const mk=o=>({id:Date.now()+"-"+Math.random().toString(36).slice(2,6),t:Date.now(),d:dk(Date.now()),...o});
+
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+
+document.addEventListener("click",async ev=>{
+ const b=ev.target.closest("[data-act],[data-tab]");if(!b)return;
+ if(b.dataset.tab){tab=b.dataset.tab;return render()}
+ const a=b.dataset.act;
+ if(a==="svc"){const i=+b.dataset.i,v=i<0?["",""]:cfg.services[i];sel=i;
+  sheet(`<h2 style="margin-top:0">${i<0?"Other service":esc(v[0])}</h2>${i<0?`<input id="nm" placeholder="Service name">`:""}
+  <input id="amt" type="number" inputmode="decimal" placeholder="Price (GH₵)" value="${v[1]}">
+  <div class="pay"><button class="cash" data-act="sale" data-pay="cash">Cash</button><button class="momo" data-act="sale" data-pay="momo">MoMo</button></div>`)}
+ if(a==="sale"){const amt=parseFloat($("#amt").value),label=sel<0?($("#nm").value.trim()||"Other"):cfg.services[sel][0];
+  if(!(amt>0))return $("#amt").focus();addEntry(mk({type:"sale",label,amt,pay:b.dataset.pay}))}
+ if(a==="exp")sheet(`<h2 style="margin-top:0">Add expense</h2><input id="amt" type="number" inputmode="decimal" placeholder="Amount (GH₵)">
+  <select id="cat">${CATS.map(c=>`<option>${c}</option>`).join("")}</select><input id="note" placeholder="Note (optional)">
+  <button class="btn p" style="width:100%" data-act="saveexp">Save expense</button>`);
+ if(a==="saveexp"){const amt=parseFloat($("#amt").value);if(!(amt>0))return $("#amt").focus();
+  const n=$("#note").value.trim(),c=$("#cat").value;addEntry(mk({type:"expense",label:n?c+": "+n:c,amt}))}
+ if(a==="del"&&confirm("Delete this record?")){await pr(st("entries","readwrite").delete(b.dataset.id));entries=entries.filter(e=>e.id!==b.dataset.id);render()}
+ if(a==="savesvc"){const l=$("#svcs").value.split("\n").map(x=>x.split(",")).map(p=>[p[0].trim(),parseFloat(p[1])||0]).filter(p=>p[0]);
+  if(l.length){cfg.services=l;await saveCfg();alert("Saved")}}
+ if(a==="backup"){const f=new File([JSON.stringify({v:1,entries,cfg})],"salonbook-"+dk(Date.now())+".json",{type:"application/json"});
+  try{if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Salon Book backup"});
+   else download(f.name,await f.text(),"application/json");
+   cfg.lastBackup=Date.now();await saveCfg();render()}catch(e){}}
+ if(a==="csv"){const r=[["date","time","type","item","payment","amount"],...entries.sort((x,y)=>x.t-y.t).map(e=>[e.d,hm(e.t),e.type,'"'+e.label.replace(/"/g,'""')+'"',e.pay||"",e.amt])];
+  download("salonbook.csv",r.map(x=>x.join(",")).join("\n"),"text/csv")}
+ if(a==="imp")$("#file").click();
+});
+document.addEventListener("change",async ev=>{
+ if(ev.target.id!=="file")return;
+ try{const j=JSON.parse(await ev.target.files[0].text());
+  for(const e of j.entries||[])await putEntry(e);
+  entries=await pr(st("entries").getAll());if(j.cfg&&j.cfg.services){cfg.services=j.cfg.services;await saveCfg()}
+  alert("Restored "+(j.entries||[]).length+" records");render()}catch(e){alert("That file could not be read.")}
+});
+init();
+</script></body></html>
