@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#5b2a4e">
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.png">
+<link rel="icon" href="icon-193.png" type="image/png">
 <title>Salon Book</title>
 <style>
 :root{--bg:#f7f3f6;--card:#fff;--ink:#231a21;--mute:#7a6b75;--pri:#5b2a4e;--onpri:#fff;--ok:#1d7a4a;--bad:#b3261e;--line:#e8dde4;--momo:#ffcc00;--cash:#2e8b57}
@@ -11,7 +11,10 @@
 *{box-sizing:border-box}
 body{margin:0;font:16px/1.4 system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--ink);padding:0 16px 96px}
 main{max-width:520px;margin:0 auto;padding-top:max(16px,env(safe-area-inset-top))}
-h1{font-size:15px;font-weight:600;color:var(--mute);margin:8px 0 4px}
+.welcome{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0 18px}
+.welcome h1{font-size:23px;line-height:1.2;color:var(--ink);margin:0}
+.welcome p{font-size:13px;color:var(--mute);margin:4px 0 0}
+.offline{font-size:12px;font-weight:600;color:var(--ok);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 9px;white-space:nowrap}
 h2{font-size:15px;margin:22px 0 8px}
 .hero{background:var(--pri);color:var(--onpri);border-radius:20px;padding:20px}
 .hero .big{font-size:40px;font-weight:700;letter-spacing:-.02em}
@@ -81,18 +84,18 @@ const close=()=>$("#sheet").close();
 
 function render(){
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
- $("#app").innerHTML=tab==="today"?today():tab==="week"?week():settings();
+ $("#app").innerHTML=`<header class="welcome"><div><h1>Welcome Felicia</h1><p>Your records stay on this device.</p></div><span class="offline">Works offline</span></header>`+(tab==="today"?today():tab==="week"?week():settings());
 }
 
 function today(){
  const t=dk(Date.now()),te=entries.filter(e=>e.d===t).sort((a,b)=>b.t-a.t);
  const s=sum(te,"sale"),x=sum(te,"expense"),h=new Date().getHours();
+ const date=new Date().toLocaleDateString([],{weekday:"long",day:"numeric",month:"long"});
  let n="";
  if(!te.some(e=>e.type==="sale"))n+=`<div class="nudge">No sales logged today yet.</div>`;
  else if(!te.some(e=>e.type==="expense")&&h>=16)n+=`<div class="nudge">Any expenses today? Tap “Add expense”.</div>`;
  if(entries.length&&Date.now()-cfg.lastBackup>7*864e5)n+=`<div class="nudge">Back up your records this week. <button class="btn" data-act="backup">Back up now</button></div>`;
- return `<h1>${new Date().toLocaleDateString([],{weekday:"long",day:"numeric",month:"long"})}</h1>
- <div class="hero"><div>Sales today</div><div class="big">${money(s)}</div>
+ return `<div class="hero"><div>Sales today · ${date}</div><div class="big">${money(s)}</div>
  <div class="row"><span>Expenses ${money(x)}</span><span>Profit ${money(s-x)}</span></div></div>${n}
  <h2>Tap a service to record a sale</h2>
  <div class="grid">${cfg.services.map((v,i)=>`<button class="svc" data-act="svc" data-i="${i}"><b>${esc(v[0])}</b><span>${money(v[1])}</span></button>`).join("")}
@@ -110,7 +113,7 @@ function week(){
  const w=entries.filter(e=>e.type==="sale"&&e.d>=dk(Date.now()-6*864e5)),cash=sum(w.filter(e=>e.pay==="cash"),"sale"),momo=sum(w.filter(e=>e.pay==="momo"),"sale");
  const top={};w.forEach(e=>top[e.label]=(top[e.label]||0)+e.amt);
  const tl=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,3);
- return `<h1>Last 7 days</h1><div class="hero"><div>Profit</div><div class="big">${money(S-X)}</div><div class="row"><span>Sales ${money(S)}</span><span>Expenses ${money(X)}</span></div></div>
+ return `<h2>Last 7 days</h2><div class="hero"><div>Profit</div><div class="big">${money(S-X)}</div><div class="row"><span>Sales ${money(S)}</span><span>Expenses ${money(X)}</span></div></div>
  <h2>Day by day</h2><div class="wk"><div class="h"></div><div class="h r">Sales</div><div class="h r">Spent</div><div class="h r">Profit</div>${rows}</div>
  <h2>Cash and MoMo</h2><div class="wk" style="grid-template-columns:1fr auto"><div>Cash</div><div class="r tot">${money(cash)}</div><div>MoMo</div><div class="r tot">${money(momo)}</div></div>
  <h2>Top earners</h2>${tl.length?tl.map(([n,v])=>`<div class="item"><div>${esc(n)}</div><div class="a">${money(v)}</div></div>`).join(""):`<div class="empty">No sales this week yet.</div>`}`;
@@ -118,7 +121,7 @@ function week(){
 
 function settings(){
  const lb=cfg.lastBackup?new Date(cfg.lastBackup).toLocaleDateString():"never";
- return `<h1>Settings</h1><h2>Services and prices</h2>
+ return `<h2>Services and prices</h2>
  <div style="color:var(--mute);font-size:14px">One per line: name, price</div>
  <textarea id="svcs">${esc(cfg.services.map(v=>v[0]+", "+v[1]).join("\n"))}</textarea>
  <button class="btn p" data-act="savesvc">Save services</button>
@@ -153,7 +156,7 @@ document.addEventListener("click",async ev=>{
  if(a==="backup"){const f=new File([JSON.stringify({v:1,entries,cfg})],"salonbook-"+dk(Date.now())+".json",{type:"application/json"});
   try{if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Salon Book backup"});
    else download(f.name,await f.text(),"application/json");
-   cfg.lastBackup=Date.now();await saveCfg();render()}catch(e){}}
+   cfg.lastBackup=Date.now();await saveCfg();render()}catch(e){if(e.name!=="AbortError")alert("Backup failed. Please try again or use Export CSV.")}}
  if(a==="csv"){const r=[["date","time","type","item","payment","amount"],...entries.sort((x,y)=>x.t-y.t).map(e=>[e.d,hm(e.t),e.type,'"'+e.label.replace(/"/g,'""')+'"',e.pay||"",e.amt])];
   download("salonbook.csv",r.map(x=>x.join(",")).join("\n"),"text/csv")}
  if(a==="imp")$("#file").click();
